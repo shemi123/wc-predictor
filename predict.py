@@ -1,6 +1,7 @@
 import os
 import requests
 from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ── Config (all from GitHub Secrets / env vars) ──────────────────────────────
 SUPABASE_URL    = "https://jobgrjaweuiifmpnpgjd.supabase.co"
@@ -26,10 +27,12 @@ def refresh_access_token():
 # ── Step 2: Fetch today's matches ────────────────────────────────────────────
 def get_todays_matches(access_token):
     print("📅 Fetching today's matches...")
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    tomorrow = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    # Get all matches, filter to today by kickoff_at date
+    
+    # Use IST date since we run at 12:05 AM IST
+    from datetime import timezone, timedelta
+    ist = timezone(timedelta(hours=5, minutes=30))
+    today_ist = datetime.now(ist).strftime("%Y-%m-%d")
+    
     r = requests.get(
         f"{SUPABASE_URL}/rest/v1/matches",
         params={"select": "*", "order": "kickoff_at.asc"},
@@ -42,12 +45,11 @@ def get_todays_matches(access_token):
     r.raise_for_status()
     all_matches = r.json()
 
-    # Filter to today's matches (UTC date)
     todays = [
         m for m in all_matches
-        if m.get("kickoff_at", "").startswith(today)
+        if m.get("kickoff_at", "").startswith(today_ist)
     ]
-    print(f"✅ Found {len(todays)} match(es) today.")
+    print(f"✅ Found {len(todays)} match(es) today ({today_ist} IST).")
     return todays
 
 
@@ -183,6 +185,8 @@ def submit_predictions(predictions, access_token, user_id):
         },
         json=payload,
     )
+    print("Response:", r.status_code, r.text)
+
     r.raise_for_status()
     print(f"✅ Successfully submitted {len(payload)} prediction(s)!")
 
