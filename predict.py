@@ -64,6 +64,52 @@ def get_predictions(matches):
     prompt = f"""You are a football analyst predicting 2026 FIFA World Cup scores.
 Predict the exact scoreline for each match below.
 Be realistic — most WC games are low scoring (0-0 to 3-1 range).
+
+Matches:
+{match_list}
+
+Respond ONLY with a JSON array, no markdown, no explanation. Format:
+[
+  {{"match_id": "...", "home_pred": 2, "away_pred": 1}},
+  ...
+]"""
+
+    print("🤖 Asking Groq for predictions...")
+    r = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "llama-3.3-70b-versatile",  # free & smart
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 500,
+        },
+    )
+    r.raise_for_status()
+    raw = r.json()["choices"][0]["message"]["content"].strip()
+    raw = raw.replace("```json", "").replace("```", "").strip()
+
+    import json
+    predictions = json.loads(raw)
+    print(f"✅ Got {len(predictions)} prediction(s).")
+    for p in predictions:
+        match = next((m for m in matches if m["id"] == p["match_id"]), None)
+        if match:
+            print(f"   {match['home_team']} {p['home_pred']} - {p['away_pred']} {match['away_team']}")
+    return predictions
+    if not matches:
+        return []
+
+    match_list = "\n".join(
+        f"- Match ID: {m['id']} | {m['home_team']} vs {m['away_team']} | Kickoff: {m['kickoff_at']}"
+        for m in matches
+    )
+
+    prompt = f"""You are a football analyst predicting 2026 FIFA World Cup scores.
+Predict the exact scoreline for each match below.
+Be realistic — most WC games are low scoring (0-0 to 3-1 range).
 Consider team strengths, tournament stage, and typical WC patterns.
 
 Matches:
