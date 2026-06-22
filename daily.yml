@@ -1,0 +1,31 @@
+name: Daily WC Predictions
+
+on:
+  schedule:
+    # Runs at 2:30 AM UTC = 8:00 AM IST every day
+    - cron: "30 2 * * *"
+
+  # Also allows manual trigger from GitHub UI (useful for testing)
+  workflow_dispatch:
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run prediction script
+        env:
+          SUPABASE_REFRESH_TOKEN: ${{ secrets.SUPABASE_REFRESH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python predict.py
