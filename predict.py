@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 SUPABASE_URL    = "https://jobgrjaweuiifmpnpgjd.supabase.co"
 SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvYmdyamF3ZXVpaWZtcG5wZ2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzYxODEsImV4cCI6MjA5NjY1MjE4MX0.lolHbDb8XckFgC8vbz96N-A-BvnH8qUOV1qcqYfHtvY"
 REFRESH_TOKEN   = os.environ["SUPABASE_REFRESH_TOKEN"]   # GitHub Secret
-ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]        # GitHub Secret
+ANTHROPIC_KEY   = os.environ["GROQ_API_KEY"]        # GitHub Secret
 
 
 # ── Step 1: Refresh Supabase access token ────────────────────────────────────
