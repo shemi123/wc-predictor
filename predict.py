@@ -28,7 +28,7 @@ def refresh_access_token():
 def get_todays_matches(access_token):
     print("📅 Fetching tomorrow's scheduled matches...")
 
-    # Get "tomorrow" in IST (since we run at 12:05 AM IST, tomorrow IST = the day we want)
+    # Get "tomorrow" in IST (since we run at 12:10 AM IST, tomorrow IST = the day we want)
     ist = timezone(timedelta(hours=5, minutes=30))
     now_ist = datetime.now(ist)
     tomorrow_ist = (now_ist + timedelta(days=1)).strftime("%Y-%m-%d")

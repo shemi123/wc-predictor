@@ -2,18 +2,18 @@ name: Daily WC Predictions
 
 on:
   schedule:
-    # 5:45 PM IST = 12:15 PM UTC (predict tomorrow's matches)
-    - cron: "15 12 * * *"
-    # 5:45 PM IST = 12:15 PM UTC (email digest of all predictions)
-    - cron: "15 12 * * *"
+    # 12:10 AM IST = 6:40 PM UTC (predict tomorrow's matches)
+    - cron: "40 18 * * *"
+    # 6:00 PM IST = 12:30 PM UTC (email digest of all predictions)
+    - cron: "30 12 * * *"
 
   workflow_dispatch:
 
 jobs:
   predict:
-    name: Submit AI Predictions (5:45 PM IST)
+    name: Submit AI Predictions (12:10 AM IST)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '15 12 * * *'
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '40 18 * * *'
 
     steps:
       - uses: actions/checkout@v4
@@ -28,9 +28,9 @@ jobs:
         run: python predict.py
 
   email_digest:
-    name: Send Predictions Email (5:45 PM IST)
+    name: Send Predictions Email (6:00 PM IST)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '15 12 * * *'
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 12 * * *'
 
     steps:
       - uses: actions/checkout@v4
