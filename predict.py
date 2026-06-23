@@ -128,21 +128,21 @@ def submit_predictions(predictions, access_token, user_id):
         for p in predictions
     ]
 
-    # r = requests.post(
-    #     f"{SUPABASE_URL}/rest/v1/predictions",
-    #     params={"on_conflict": "user_id,match_id"},
-    #     headers={
-    #         "apikey": SUPABASE_ANON,
-    #         "Authorization": f"Bearer {access_token}",
-    #         "Content-Type": "application/json",
-    #         "Content-Profile": "public",
-    #         "Prefer": "resolution=merge-duplicates",
-    #     },
-    #     json=payload,
-    # )
-    # print("Response:", r.status_code, r.text)
+    r = requests.post(
+        f"{SUPABASE_URL}/rest/v1/predictions",
+        params={"on_conflict": "user_id,match_id"},
+        headers={
+            "apikey": SUPABASE_ANON,
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Content-Profile": "public",
+            "Prefer": "resolution=merge-duplicates",
+        },
+        json=payload,
+    )
+    print("Response:", r.status_code, r.text)
 
-    # r.raise_for_status()
+    r.raise_for_status()
     print(f"✅ Successfully submitted {len(payload)} prediction(s)!")
 
 
