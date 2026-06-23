@@ -151,13 +151,21 @@ def build_email(matches, predictions, users, tomorrow_ist):
             if not match_preds:
                 html += '<tr><td colspan="2" style="padding: 12px 16px; color: #aaa; font-size: 13px;">No predictions yet</td></tr>'
             else:
-                for i, p in enumerate(match_preds):
+                # Sort predictions by user's rank (ascending)
+                # Default to 9999 if the user is not found or has no rank
+                match_preds_sorted = sorted(
+                    match_preds,
+                    key=lambda p: users.get(p["user_id"], {}).get("rank", 9999)
+                )
+                for i, p in enumerate(match_preds_sorted):
                     user = users.get(p["user_id"], {})
                     name = user.get("display_name") or p["user_id"][:8] + "..."
+                    rank = user.get("rank")
+                    rank_str = f" (#{rank})" if rank is not None else ""
                     bg = "#fff" if i % 2 == 0 else "#fafafa"
                     html += f"""
         <tr style="background: {bg};">
-          <td style="padding: 10px 16px; font-size: 13px;">{name}</td>
+          <td style="padding: 10px 16px; font-size: 13px;">{name}{rank_str}</td>
           <td style="padding: 10px; text-align: center; font-weight: bold; font-size: 15px;">
             {p['home_pred']} - {p['away_pred']}
           </td>
