@@ -26,30 +26,35 @@ def refresh_access_token():
 
 # ── Step 2: Fetch today's matches ────────────────────────────────────────────
 def get_todays_matches(access_token):
-    print("📅 Fetching today's matches...")
-    
-    # Use IST date since we run at 12:05 AM IST
-    from datetime import timezone, timedelta
+    print("📅 Fetching tomorrow's scheduled matches...")
+
+    # Get "tomorrow" in IST (since we run at 12:05 AM IST, tomorrow IST = the day we want)
     ist = timezone(timedelta(hours=5, minutes=30))
-    today_ist = datetime.now(ist).strftime("%Y-%m-%d")
-    
+    now_ist = datetime.now(ist)
+    tomorrow_ist = (now_ist + timedelta(days=1)).strftime("%Y-%m-%d")
+
     r = requests.get(
         f"{SUPABASE_URL}/rest/v1/matches",
         params={"select": "*", "order": "kickoff_at.asc"},
         headers={
             "apikey": SUPABASE_ANON,
             "Authorization": f"Bearer {access_token}",
-            "Accept-Profile": "public",
+            "accept-profile": "public",
+            "x-client-info": "supabase-js/2.108.1; runtime=web",
         },
     )
     r.raise_for_status()
     all_matches = r.json()
 
+    # Filter: status=scheduled, kickoff date matches tomorrow IST
     todays = [
         m for m in all_matches
-        if m.get("kickoff_at", "").startswith(today_ist)
+        if m.get("status") == "scheduled"
+        and datetime.fromisoformat(m["kickoff_at"]).astimezone(ist).strftime("%Y-%m-%d") == tomorrow_ist
+        and m.get("home_team") != "TBD"  # skip unconfirmed matches
     ]
-    print(f"✅ Found {len(todays)} match(es) today ({today_ist} IST).")
+
+    print(f"✅ Found {len(todays)} scheduled match(es) for {tomorrow_ist} IST.")
     return todays
 
 
@@ -101,56 +106,6 @@ Respond ONLY with a JSON array, no markdown, no explanation. Format:
         if match:
             print(f"   {match['home_team']} {p['home_pred']} - {p['away_pred']} {match['away_team']}")
     return predictions
-    if not matches:
-        return []
-
-    match_list = "\n".join(
-        f"- Match ID: {m['id']} | {m['home_team']} vs {m['away_team']} | Kickoff: {m['kickoff_at']}"
-        for m in matches
-    )
-
-    prompt = f"""You are a football analyst predicting 2026 FIFA World Cup scores.
-Predict the exact scoreline for each match below.
-Be realistic — most WC games are low scoring (0-0 to 3-1 range).
-Consider team strengths, tournament stage, and typical WC patterns.
-
-Matches:
-{match_list}
-
-Respond ONLY with a JSON array, no markdown, no explanation. Format:
-[
-  {{"match_id": "...", "home_pred": 2, "away_pred": 1}},
-  ...
-]"""
-
-    print("🤖 Asking Claude for predictions...")
-    r = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 500,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-    )
-    r.raise_for_status()
-    raw = r.json()["content"][0]["text"].strip()
-
-    # Strip any accidental markdown fences
-    raw = raw.replace("```json", "").replace("```", "").strip()
-
-    import json
-    predictions = json.loads(raw)
-    print(f"✅ Got {len(predictions)} prediction(s) from Claude.")
-    for p in predictions:
-        match = next((m for m in matches if m["id"] == p["match_id"]), None)
-        if match:
-            print(f"   {match['home_team']} {p['home_pred']} - {p['away_pred']} {match['away_team']}")
-    return predictions
 
 
 # ── Step 4: Submit predictions to Supabase ───────────────────────────────────
@@ -173,21 +128,21 @@ def submit_predictions(predictions, access_token, user_id):
         for p in predictions
     ]
 
-    r = requests.post(
-        f"{SUPABASE_URL}/rest/v1/predictions",
-        params={"on_conflict": "user_id,match_id"},
-        headers={
-            "apikey": SUPABASE_ANON,
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-            "Content-Profile": "public",
-            "Prefer": "resolution=merge-duplicates",
-        },
-        json=payload,
-    )
-    print("Response:", r.status_code, r.text)
+    # r = requests.post(
+    #     f"{SUPABASE_URL}/rest/v1/predictions",
+    #     params={"on_conflict": "user_id,match_id"},
+    #     headers={
+    #         "apikey": SUPABASE_ANON,
+    #         "Authorization": f"Bearer {access_token}",
+    #         "Content-Type": "application/json",
+    #         "Content-Profile": "public",
+    #         "Prefer": "resolution=merge-duplicates",
+    #     },
+    #     json=payload,
+    # )
+    # print("Response:", r.status_code, r.text)
 
-    r.raise_for_status()
+    # r.raise_for_status()
     print(f"✅ Successfully submitted {len(payload)} prediction(s)!")
 
 
