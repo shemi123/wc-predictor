@@ -3,6 +3,7 @@ name: Daily WC Predictions
 on:
   schedule:
     # 12:10 AM IST = 6:40 PM UTC (predict tomorrow's matches)
+   - cron: "30 12 * * *"
   
     # 6:00 PM IST = 12:30 PM UTC (email digest of all predictions)
     - cron: "30 12 * * *"
