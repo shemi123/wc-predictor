@@ -1,16 +1,41 @@
 import os
+import subprocess
 import requests
-from datetime import datetime, timezone
 from datetime import datetime, timezone, timedelta
 
 # ── Config (all from GitHub Secrets / env vars) ──────────────────────────────
 SUPABASE_URL    = "https://jobgrjaweuiifmpnpgjd.supabase.co"
 SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvYmdyamF3ZXVpaWZtcG5wZ2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzYxODEsImV4cCI6MjA5NjY1MjE4MX0.lolHbDb8XckFgC8vbz96N-A-BvnH8qUOV1qcqYfHtvY"
-REFRESH_TOKEN   = os.environ["SUPABASE_REFRESH_TOKEN"]   # GitHub Secret
-ANTHROPIC_KEY   = os.environ["GROQ_API_KEY"]        # GitHub Secret
+REFRESH_TOKEN   = os.environ["SUPABASE_REFRESH_TOKEN"]    # GitHub Secret (auto-rotated)
+GH_PAT          = os.environ.get("GH_PAT", "")           # GitHub PAT (to update secrets)
+GH_REPO         = os.environ.get("GITHUB_REPOSITORY", "")  # auto-set by GitHub Actions
+ANTHROPIC_KEY   = os.environ["GROQ_API_KEY"]              # GitHub Secret
 
 
-# ── Step 1: Refresh Supabase access token ────────────────────────────────────
+# ── Helper: Update a GitHub Actions secret using gh CLI ───────────────────────
+def update_github_secret(secret_name: str, secret_value: str):
+    """Update a GitHub Actions secret using the gh CLI (pre-installed on Actions runners)."""
+    if not GH_REPO or not GH_PAT:
+        print("⚠️  Not in GitHub Actions or GH_PAT missing, skipping secret rotation.")
+        return
+
+    try:
+        result = subprocess.run(
+            ["gh", "secret", "set", secret_name, "--repo", GH_REPO, "--body", secret_value],
+            env={**os.environ, "GH_TOKEN": GH_PAT},
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            print(f"✅ GitHub secret '{secret_name}' updated for next run.")
+        else:
+            print(f"⚠️  Failed to update secret: {result.stderr.strip()}")
+    except FileNotFoundError:
+        print("⚠️  gh CLI not found, skipping secret rotation.")
+    except Exception as e:
+        print(f"⚠️  Secret rotation failed: {e}")
+
+
+# ── Step 1: Refresh Supabase access token (with auto-rotation) ───────────────
 def refresh_access_token():
     print("🔑 Refreshing Supabase access token...")
     r = requests.post(
@@ -18,9 +43,16 @@ def refresh_access_token():
         headers={"apikey": SUPABASE_ANON, "Content-Type": "application/json"},
         json={"refresh_token": REFRESH_TOKEN},
     )
+    print("Auth response:", r.status_code)
     r.raise_for_status()
     data = r.json()
-    print(f"✅ Token refreshed. User: {data['user']['email']}")
+
+    # Save the new refresh token so the next run uses it
+    new_refresh_token = data["refresh_token"]
+    print("🔄 Rotating refresh token...")
+    update_github_secret("SUPABASE_REFRESH_TOKEN", new_refresh_token)
+
+    print(f"✅ Signed in as {data['user']['email']}")
     return data["access_token"], data["user"]["id"]
 
 

@@ -1,4 +1,5 @@
 import os
+import subprocess
 import requests
 import smtplib
 from email.mime.text import MIMEText
@@ -8,24 +9,56 @@ from datetime import datetime, timezone, timedelta
 # ── Config ────────────────────────────────────────────────────────────────────
 SUPABASE_URL  = "https://jobgrjaweuiifmpnpgjd.supabase.co"
 SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvYmdyamF3ZXVpaWZtcG5wZ2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNzYxODEsImV4cCI6MjA5NjY1MjE4MX0.lolHbDb8XckFgC8vbz96N-A-BvnH8qUOV1qcqYfHtvY"
-REFRESH_TOKEN = os.environ["SUPABASE_REFRESH_TOKEN"]  # GitHub Secret
-GMAIL_USER    = os.environ["GMAIL_USER"]              # GitHub Secret (your gmail)
-GMAIL_PASS    = os.environ["GMAIL_APP_PASS"]          # GitHub Secret (app password)
-TO_EMAIL      = os.environ["GMAIL_USER"]              # send to yourself
+REFRESH_TOKEN = os.environ["SUPABASE_REFRESH_TOKEN"]  # GitHub Secret (auto-rotated)
+GH_PAT        = os.environ.get("GH_PAT", "")         # GitHub PAT (to update secrets)
+GH_REPO       = os.environ.get("GITHUB_REPOSITORY", "")  # auto-set by GitHub Actions
+GMAIL_USER    = os.environ["GMAIL_USER"]
+GMAIL_PASS    = os.environ["GMAIL_APP_PASS"]
+TO_EMAIL      = os.environ["GMAIL_USER"]
 
 
-# ── Step 1: Refresh access token ─────────────────────────────────────────────
-def refresh_access_token():
+# ── Helper: Update a GitHub Actions secret using gh CLI ───────────────────────
+def update_github_secret(secret_name: str, secret_value: str):
+    """Update a GitHub Actions secret using the gh CLI (pre-installed on Actions runners)."""
+    if not GH_REPO or not GH_PAT:
+        print("⚠️  Not in GitHub Actions or GH_PAT missing, skipping secret rotation.")
+        return
+
+    try:
+        result = subprocess.run(
+            ["gh", "secret", "set", secret_name, "--repo", GH_REPO, "--body", secret_value],
+            env={**os.environ, "GH_TOKEN": GH_PAT},
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            print(f"✅ GitHub secret '{secret_name}' updated for next run.")
+        else:
+            print(f"⚠️  Failed to update secret: {result.stderr.strip()}")
+    except FileNotFoundError:
+        print("⚠️  gh CLI not found, skipping secret rotation.")
+    except Exception as e:
+        print(f"⚠️  Secret rotation failed: {e}")
+
+
+# ── Step 1: Refresh access token (with auto-rotation) ────────────────────────
+def get_access_token():
+    """Refresh the access token, then save the NEW refresh token back to GitHub Secrets."""
     print("🔑 Refreshing access token...")
     r = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
         headers={"apikey": SUPABASE_ANON, "Content-Type": "application/json"},
         json={"refresh_token": REFRESH_TOKEN},
     )
-    print("Auth response:", r.status_code, r.text[:200])
+    print("Auth response:", r.status_code)
     r.raise_for_status()
     data = r.json()
-    print("✅ Token refreshed.")
+
+    # Save the new refresh token so the next run uses it
+    new_refresh_token = data["refresh_token"]
+    print("🔄 Rotating refresh token...")
+    update_github_secret("SUPABASE_REFRESH_TOKEN", new_refresh_token)
+
+    print(f"✅ Token refreshed. User: {data['user']['email']}")
     return data["access_token"]
 
 
@@ -201,7 +234,7 @@ def send_email(html, tomorrow_ist):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    access_token = refresh_access_token()
+    access_token = get_access_token()
     matches, tomorrow_ist = get_tomorrow_matches(access_token)
     match_ids = [m["id"] for m in matches]
     predictions = get_all_predictions(access_token, match_ids)
