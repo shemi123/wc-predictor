@@ -26,6 +26,7 @@ jobs:
       - name: Run prediction script
         env:
           SUPABASE_REFRESH_TOKEN: ${{ secrets.SUPABASE_REFRESH_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python predict.py
 
@@ -43,6 +44,7 @@ jobs:
       - name: Send email digest
         env:
           SUPABASE_REFRESH_TOKEN: ${{ secrets.SUPABASE_REFRESH_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
         run: python email_digest.py
