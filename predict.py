@@ -90,6 +90,33 @@ def get_todays_matches(access_token):
     return todays
 
 
+# ── Step 2.5: Get existing predictions by this user ──────────────────────────
+def get_existing_predictions(access_token, user_id, match_ids):
+    if not match_ids:
+        return set()
+
+    print("🔍 Checking existing predictions...")
+    ids_filter = f"in.({','.join(match_ids)})"
+    r = requests.get(
+        f"{SUPABASE_URL}/rest/v1/predictions",
+        params={
+            "select": "match_id",
+            "user_id": f"eq.{user_id}",
+            "match_id": ids_filter,
+        },
+        headers={
+            "apikey": SUPABASE_ANON,
+            "Authorization": f"Bearer {access_token}",
+            "accept-profile": "public",
+        },
+    )
+    r.raise_for_status()
+    preds = r.json()
+    existing = {p["match_id"] for p in preds}
+    print(f"   Found {len(existing)} match(es) already predicted by you.")
+    return existing
+
+
 # ── Step 3: Ask Claude for predictions ───────────────────────────────────────
 def get_predictions(matches):
     if not matches:
@@ -186,5 +213,15 @@ if __name__ == "__main__":
     if not matches:
         print("ℹ️  No matches today. Nothing to predict.")
     else:
-        predictions = get_predictions(matches)
-        submit_predictions(predictions, access_token, user_id)
+        match_ids = [m["id"] for m in matches]
+        existing_preds = get_existing_predictions(access_token, user_id, match_ids)
+        
+        # Keep only matches that the user hasn't predicted yet
+        unpredicted_matches = [m for m in matches if m["id"] not in existing_preds]
+
+        if not unpredicted_matches:
+            print("🎉 All matches for today are already predicted manually! Skipping AI predictions.")
+        else:
+            print(f"🤖 Predicting {len(unpredicted_matches)} match(es) that don't have predictions yet...")
+            predictions = get_predictions(unpredicted_matches)
+            submit_predictions(predictions, access_token, user_id)
