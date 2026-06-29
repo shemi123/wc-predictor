@@ -29,13 +29,13 @@ def refresh_access_token():
     return data["access_token"]
 
 
-# ── Step 2: Get scheduled matches from now onwards ────────────────────────────
-def get_scheduled_matches(access_token):
+# ── Step 2: Get tomorrow's scheduled matches ──────────────────────────────────
+def get_tomorrow_matches(access_token):
     ist = timezone(timedelta(hours=5, minutes=30))
     now_ist = datetime.now(ist)
     today_ist = now_ist.strftime("%Y-%m-%d")
     tomorrow_ist = (now_ist + timedelta(days=1)).strftime("%Y-%m-%d")
-    print(f"📅 Fetching scheduled matches from now ({now_ist.strftime('%Y-%m-%d %I:%M %p')} IST) onwards...")
+    print(f"📅 Fetching scheduled matches from now ({now_ist.strftime('%Y-%m-%d %I:%M %p')} IST) and tomorrow...")
 
     r = requests.get(
         f"{SUPABASE_URL}/rest/v1/matches",
@@ -53,6 +53,7 @@ def get_scheduled_matches(access_token):
         m for m in all_matches
         if m.get("status") == "scheduled"
         and datetime.fromisoformat(m["kickoff_at"]).astimezone(ist) >= now_ist
+        and datetime.fromisoformat(m["kickoff_at"]).astimezone(ist).strftime("%Y-%m-%d") in (today_ist, tomorrow_ist)
     ]
     print(f"✅ Found {len(matches)} match(es).")
     return matches, today_ist, tomorrow_ist
@@ -219,7 +220,7 @@ def send_email(html, date_header):
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     access_token = refresh_access_token()
-    matches, today_ist, tomorrow_ist = get_scheduled_matches(access_token)
+    matches, today_ist, tomorrow_ist = get_tomorrow_matches(access_token)
     match_ids = [m["id"] for m in matches]
     predictions = get_all_predictions(access_token, match_ids)
     users = get_all_users(access_token)
