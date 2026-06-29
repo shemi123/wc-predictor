@@ -29,12 +29,13 @@ def refresh_access_token():
     return data["access_token"]
 
 
-# ── Step 2: Get tomorrow's scheduled matches ──────────────────────────────────
-def get_tomorrow_matches(access_token):
+# ── Step 2: Get scheduled matches from now onwards ────────────────────────────
+def get_scheduled_matches(access_token):
     ist = timezone(timedelta(hours=5, minutes=30))
     now_ist = datetime.now(ist)
+    today_ist = now_ist.strftime("%Y-%m-%d")
     tomorrow_ist = (now_ist + timedelta(days=1)).strftime("%Y-%m-%d")
-    print(f"📅 Fetching matches for {tomorrow_ist} IST...")
+    print(f"📅 Fetching scheduled matches from now ({now_ist.strftime('%Y-%m-%d %I:%M %p')} IST) onwards...")
 
     r = requests.get(
         f"{SUPABASE_URL}/rest/v1/matches",
@@ -51,10 +52,12 @@ def get_tomorrow_matches(access_token):
     matches = [
         m for m in all_matches
         if m.get("status") == "scheduled"
-        and datetime.fromisoformat(m["kickoff_at"]).astimezone(ist).strftime("%Y-%m-%d") == tomorrow_ist
+        and datetime.fromisoformat(m["kickoff_at"]).astimezone(ist) >= now_ist
     ]
     print(f"✅ Found {len(matches)} match(es).")
-    return matches, tomorrow_ist
+    return matches, today_ist, tomorrow_ist
+
+
 
 
 # ── Step 3: Get all predictions for those matches ────────────────────────────
@@ -104,7 +107,7 @@ def get_all_users(access_token):
 
 
 # ── Step 5: Build HTML email ──────────────────────────────────────────────────
-def build_email(matches, predictions, users, tomorrow_ist):
+def build_email(matches, predictions, users, today_ist, tomorrow_ist):
     ist = timezone(timedelta(hours=5, minutes=30))
 
     # Index predictions by match_id
@@ -112,24 +115,38 @@ def build_email(matches, predictions, users, tomorrow_ist):
     for p in predictions:
         preds_by_match.setdefault(p["match_id"], []).append(p)
 
+    date_header = f"{today_ist} & {tomorrow_ist}" if today_ist != tomorrow_ist else today_ist
+
     html = f"""
 <html><body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px;">
 <div style="max-width: 600px; margin: auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
 
   <div style="background: #1a1a2e; color: white; padding: 24px 28px;">
     <h1 style="margin: 0; font-size: 22px;">🏆 Simelabs WC 26</h1>
-    <p style="margin: 6px 0 0; color: #aaa; font-size: 14px;">Predictions Digest — {tomorrow_ist}</p>
+    <p style="margin: 6px 0 0; color: #aaa; font-size: 14px;">Predictions Digest — {date_header}</p>
   </div>
 
   <div style="padding: 24px 28px;">
 """
 
     if not matches:
-        html += "<p>No scheduled matches found for tomorrow.</p>"
+        html += "<p>No scheduled matches found for today or tomorrow.</p>"
     else:
         for match in matches:
             mid = match["id"]
-            kickoff = datetime.fromisoformat(match["kickoff_at"]).astimezone(ist).strftime("%I:%M %p IST")
+            kickoff_dt = datetime.fromisoformat(match["kickoff_at"]).astimezone(ist)
+            kickoff_date = kickoff_dt.strftime("%Y-%m-%d")
+            
+            # Determine prefix: Today or Tomorrow
+            if kickoff_date == today_ist:
+                day_prefix = "Today"
+            elif kickoff_date == tomorrow_ist:
+                day_prefix = "Tomorrow"
+            else:
+                day_prefix = kickoff_dt.strftime("%d %b")
+
+            kickoff = f"{day_prefix}, {kickoff_dt.strftime('%I:%M %p')} IST"
+            
             match_preds = preds_by_match.get(mid, [])
             home = match.get("home_team", "?")
             away = match.get("away_team", "?")
@@ -185,10 +202,10 @@ def build_email(matches, predictions, users, tomorrow_ist):
 
 
 # ── Step 6: Send email via Gmail ──────────────────────────────────────────────
-def send_email(html, tomorrow_ist):
+def send_email(html, date_header):
     print("📧 Sending email...")
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"⚽ WC 26 Predictions — {tomorrow_ist}"
+    msg["Subject"] = f"⚽ WC 26 Predictions — {date_header}"
     msg["From"]    = GMAIL_USER
     msg["To"]      = TO_EMAIL
     msg.attach(MIMEText(html, "html"))
@@ -202,9 +219,10 @@ def send_email(html, tomorrow_ist):
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     access_token = refresh_access_token()
-    matches, tomorrow_ist = get_tomorrow_matches(access_token)
+    matches, today_ist, tomorrow_ist = get_scheduled_matches(access_token)
     match_ids = [m["id"] for m in matches]
     predictions = get_all_predictions(access_token, match_ids)
     users = get_all_users(access_token)
-    html = build_email(matches, predictions, users, tomorrow_ist)
-    send_email(html, tomorrow_ist)
+    html = build_email(matches, predictions, users, today_ist, tomorrow_ist)
+    date_header = f"{today_ist} & {tomorrow_ist}" if today_ist != tomorrow_ist else today_ist
+    send_email(html, date_header)
